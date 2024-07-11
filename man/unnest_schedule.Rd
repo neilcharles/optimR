@@ -2,13 +2,15 @@
 % Please edit documentation in R/schedule_s3.R
 \name{unnest_schedule}
 \alias{unnest_schedule}
-\title{Unnests a schedule object into a tibble where each row is one media on one date. Used internally by optimR for optimisation runs.}
+\title{Unnests a schedule object into a tibble. Used internally by optimR for optimisation runs and charting.}
 \usage{
-unnest_schedule(schedule)
+unnest_schedule(schedule, level = "date")
 }
 \arguments{
-\item{schedule}{}
+\item{schedule}{An optimR media schedule}
+
+\item{level}{The level to unnest to. Can be "date" (fully unnested), or "media", which will leave dates nested}
 }
 \description{
-Unnests a schedule object into a tibble where each row is one media on one date. Used internally by optimR for optimisation runs.
+Unnests a schedule object into a tibble. Used internally by optimR for optimisation runs and charting.
 }

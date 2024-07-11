@@ -74,6 +74,17 @@ campaign <- function(name = character(), product = character()) {
   campaign
 }
 
+#' Adds a campaign to a schedule
+#'
+#' @param schedule An optimR schedule
+#' @param campaign A campaign object created with optimR::campaign()
+#'
+#' @return schedule
+#' @export
+#'
+#' @examples
+#' schedule_with_campaign <- create_schedule("my plan", "2023-01-01", "2023-12-01") |>
+#'   add_campaign(campaign("my first campaign", "my product"))
 add_campaign <- function(schedule, campaign) {
   schedule |>
     dplyr::mutate(campaign_items = purrr::map(campaign_items, .f = ~ dplyr::bind_rows(.x, campaign)))
