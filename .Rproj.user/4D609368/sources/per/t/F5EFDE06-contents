@@ -1,0 +1,117 @@
+demo_data <- function(){
+  tibble::tibble(
+    seq(lubridate::ymd('2023-01-01'), lubridate::ymd('2023-06-01'), by = 'months'),
+    channel = LETTERS[seq(1,6)],
+    campaign = LETTERS[seq(1,6)],
+    alpha = runif(6),
+    beta = runif(6) + 1000,
+    spend = rep(0,6),
+    lift = rep(0,6)
+  )
+}
+
+
+optimise_schedule <- function(schedule, budget, step) {
+
+  pb = txtProgressBar(min = 0, max = budget, initial = 0)
+
+  total_spend <- 0
+
+  while(total_spend < budget){
+    total_lifts <- schedule |>
+      dplyr::select(spend, alpha, beta) |>
+      dplyr::mutate(spend = spend + step) |>
+      purrr::pmap(.f = calculate_curve) |>
+      as.numeric()
+
+    marginal_lifts <- total_lifts - schedule$lift
+
+    allocation <- which(marginal_lifts==max(marginal_lifts))
+
+    schedule$spend[allocation] <- schedule$spend[allocation] + step
+    schedule$lift[allocation] <- total_lifts[allocation]
+
+    total_spend <- total_spend + step
+
+    setTxtProgressBar(pb, total_spend)
+  }
+
+  schedule
+
+}
+
+calculate_curve <- function(spend, alpha, beta){
+  alpha * (1 - exp(-spend / beta))
+}
+
+plot_curves <- function(curves, n = 50, max_x = NA){
+
+  plot <- plotly::plot_ly()
+
+
+
+  if(is.na(max_x)) max_x <- beta * 5
+
+  x = seq(0, max_x, max_x / n)
+  y = as.numeric(purrr::map(x, .f = ~calculate_curve(.x, alpha, beta)))
+
+  highlight <- tibble::tibble(
+    x = budget,
+    y = calculate_curve(budget, alpha, beta)
+  )
+
+  plot <- tibble::tibble(x,y) |>
+    plotly::plot_ly() |>
+    plotly::add_lines(x = ~ x, y = ~ y, name = "Response Curve") |>
+    plotly::layout(
+      xaxis = list(
+        spikemode = "toaxis",
+        title = list(text = "Budget")
+      ),
+      yaxis = list(
+        spikemode = "toaxis",
+        title = list(text = "Response"),
+        range = c(0, max(y * 1.1))
+      ),
+      legend = list(x = 0, y = 100)
+    ) |>
+    sequence_plotly_format()
+
+  if(!is.na(budget)){
+    plot <- plot |>
+      plotly::add_markers(data = highlight,
+                          x = ~x,
+                          y = ~y,
+                          size = 20,
+                          name = "Budget")
+
+  }
+
+  plot
+
+}
+
+sequence_plotly_format <- function(plot, labels_colour = "grey"){
+  plot <- plot |>
+    plotly::layout(
+      xaxis = list(
+        title = list(font = list(color = labels_colour)),
+        zeroline = FALSE,
+        showline = FALSE,
+        tickfont = list(
+          color = labels_colour
+        )
+      ),
+      yaxis = list(
+        title = list(font = list(color = labels_colour)),
+        zeroline = FALSE,
+        showline = FALSE,
+        tickfont = list(
+          color = labels_colour
+        )
+      ),
+      legend = list(x = 0, y = 100)
+    )
+
+  plot
+}
