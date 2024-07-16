@@ -62,7 +62,7 @@ options(scipen = 999)
 
 ## Loads csv's, calculates curves and plots them
 
-```{r setup}
+```{r}
 
 # curve_points <- get_curve_points("c:/temp")
 # 
@@ -85,7 +85,7 @@ options(scipen = 999)
 
 ## Calculates parameters for negative exponential diminishing returns
 
-```{r setup}
+```{r}
 
 # curve_params <- calc_curve_parameters(channel_curves)
 
@@ -93,7 +93,7 @@ options(scipen = 999)
 
 ## Build an optimR schedule using the curve parameters
 
-```{r setup}
+```{r}
 
 # schedule <- create_schedule("Scedule 1", "2025-01-01", "2025-12-31", "year") |>
 #   add_campaign(campaign("Campaign 1", "Product 1"))
@@ -114,7 +114,7 @@ options(scipen = 999)
 
 ## Optimise the schedule
 
-```{r setup}
+```{r}
 
 # laydown <- schedule |> 
 #   optimise_schedule(max_budget = 3000000, step = 100000)
@@ -126,7 +126,7 @@ options(scipen = 999)
 
 ## Visualise full diminishing returns using curve parameters
 
-```{r setup}
+```{r}
 
 # budgets <- tibble::tibble(budget = seq(0, 10000000, 1000000))
 # 
