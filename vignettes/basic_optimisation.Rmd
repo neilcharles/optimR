@@ -1,0 +1,28 @@
+---
+title: "basic_optimisation"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{basic_optimisation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(optimR)
+
+schedule <- schedule_demo()
+
+laydown <- schedule |> 
+  optimise_schedule(max_budget = 1000000, step = 100000)
+
+laydown |> 
+  unnest_schedule()
+
+```
