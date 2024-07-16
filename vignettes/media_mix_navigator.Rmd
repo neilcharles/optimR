@@ -30,33 +30,33 @@ options(scipen = 999)
 # Get docker run command
 # schedule <- schedule_demo()
 
-remDr <- connect_selenium()
-
-scenarios <- 
-  make_scenarios(
-    min_budget = 1,
-    max_budget = 9,
-    step_budget = 1,
-    category_option = 1,
-    appeal_option = 2,
-    percent_sales_online_option = 9,
-    brand_size = 100,
-    risk_option = 2
-  ) |> 
-  dplyr::union_all(
-    make_scenarios(
-    min_budget = 10,
-    max_budget = 100,
-    step_budget = 10,
-    category_option = 1,
-    appeal_option = 2,
-    percent_sales_online_option = 9,
-    brand_size = 100,
-    risk_option = 2
-))
-
-scenarios |> 
-  purrr::pwalk(scrape_navigator, remDr = remDr)
+# remDr <- connect_selenium()
+# 
+# scenarios <- 
+#   make_scenarios(
+#     min_budget = 1,
+#     max_budget = 9,
+#     step_budget = 1,
+#     category_option = 1,
+#     appeal_option = 2,
+#     percent_sales_online_option = 9,
+#     brand_size = 100,
+#     risk_option = 2
+#   ) |> 
+#   dplyr::union_all(
+#     make_scenarios(
+#     min_budget = 10,
+#     max_budget = 100,
+#     step_budget = 10,
+#     category_option = 1,
+#     appeal_option = 2,
+#     percent_sales_online_option = 9,
+#     brand_size = 100,
+#     risk_option = 2
+# ))
+# 
+# scenarios |> 
+#   purrr::pwalk(scrape_navigator, remDr = remDr)
 
 ```
 
@@ -64,22 +64,22 @@ scenarios |>
 
 ```{r setup}
 
-curve_points <- get_curve_points("c:/temp")
-
-channel_curves <- make_channel_curves(curve_points)
-
-channel_curves |> 
-  ggplot2::ggplot(ggplot2::aes(x = year_1_spend, y = channel_total_uplift, colour = channel)) +
-  ggplot2::geom_line() +
-  ggplot2::geom_label(ggplot2::aes(label = label)) +
-  seq_ggplot_minimal() +
-  ggplot2::xlab("Annual Spend") +
-  ggplot2::ylab("Uplift") +
-  ggplot2::scale_y_continuous(labels = scales::label_comma()) +
-  ggplot2::scale_x_continuous(labels = scales::label_comma()) +
-  ggplot2::theme(legend.position="none",
-        axis.title.x = ggplot2::element_text(color = seq_palette$lightgrey, hjust = 0.9),
-        axis.title.y = ggplot2::element_text(color = seq_palette$lightgrey))
+# curve_points <- get_curve_points("c:/temp")
+# 
+# channel_curves <- make_channel_curves(curve_points)
+# 
+# channel_curves |> 
+#   ggplot2::ggplot(ggplot2::aes(x = year_1_spend, y = channel_total_uplift, colour = channel)) +
+#   ggplot2::geom_line() +
+#   ggplot2::geom_label(ggplot2::aes(label = label)) +
+#   seq_ggplot_minimal() +
+#   ggplot2::xlab("Annual Spend") +
+#   ggplot2::ylab("Uplift") +
+#   ggplot2::scale_y_continuous(labels = scales::label_comma()) +
+#   ggplot2::scale_x_continuous(labels = scales::label_comma()) +
+#   ggplot2::theme(legend.position="none",
+#         axis.title.x = ggplot2::element_text(color = seq_palette$lightgrey, hjust = 0.9),
+#         axis.title.y = ggplot2::element_text(color = seq_palette$lightgrey))
   
 ```
 
@@ -87,7 +87,7 @@ channel_curves |>
 
 ```{r setup}
 
-curve_params <- calc_curve_parameters(channel_curves)
+# curve_params <- calc_curve_parameters(channel_curves)
 
 ```
 
@@ -95,20 +95,20 @@ curve_params <- calc_curve_parameters(channel_curves)
 
 ```{r setup}
 
-schedule <- create_schedule("Scedule 1", "2025-01-01", "2025-12-31", "year") |>
-  add_campaign(campaign("Campaign 1", "Product 1"))
-
-for(i in 1:nrow(curve_params)){
-  
-  media_item <- curve_params[i,] |> 
-    unnest(cols = model_params) |> 
-    select(channel, term, estimate) |> 
-    pivot_wider(names_from = term, values_from = estimate)
-    
-  
-  schedule <- schedule |> 
-    add_media(1, media(media_item$channel, media_item$channel, alpha = media_item$a, beta = media_item$b, decay = 1))
-}
+# schedule <- create_schedule("Scedule 1", "2025-01-01", "2025-12-31", "year") |>
+#   add_campaign(campaign("Campaign 1", "Product 1"))
+# 
+# for(i in 1:nrow(curve_params)){
+#   
+#   media_item <- curve_params[i,] |> 
+#     unnest(cols = model_params) |> 
+#     select(channel, term, estimate) |> 
+#     pivot_wider(names_from = term, values_from = estimate)
+#     
+#   
+#   schedule <- schedule |> 
+#     add_media(1, media(media_item$channel, media_item$channel, alpha = media_item$a, beta = media_item$b, decay = 1))
+# }
 
 ```
 
@@ -116,11 +116,11 @@ for(i in 1:nrow(curve_params)){
 
 ```{r setup}
 
-laydown <- schedule |> 
-  optimise_schedule(max_budget = 3000000, step = 100000)
-
-laydown |> 
-  unnest_schedule()
+# laydown <- schedule |> 
+#   optimise_schedule(max_budget = 3000000, step = 100000)
+# 
+# laydown |> 
+#   unnest_schedule()
 
 ```
 
@@ -128,29 +128,29 @@ laydown |>
 
 ```{r setup}
 
-budgets <- tibble::tibble(budget = seq(0, 10000000, 1000000))
-
-vis_curves <- curve_params |> 
-  unnest(cols = model_params) |> 
-  select(channel, term, estimate) |> 
-  pivot_wider(names_from = term, values_from = estimate) |> 
-  crossing(budgets) |> 
-  mutate(lift = a*(1-exp(-budget/b))) |> 
-  group_by(channel) |> 
-  dplyr::mutate(label = ifelse(lift == max(lift), channel, NA))
-
-vis_curves |> 
-  dplyr::mutate(label = ifelse(lift == max(lift), channel, NA)) |> 
-  ggplot2::ggplot(ggplot2::aes(x = budget, y = lift, colour = channel)) +
-  ggplot2::geom_line() +
-  ggplot2::geom_label(ggplot2::aes(label = label)) +
-  seq_ggplot_minimal() +
-  ggplot2::xlab("Annual Spend") +
-  ggplot2::ylab("Uplift") +
-  ggplot2::scale_y_continuous(labels = scales::label_comma()) +
-  ggplot2::scale_x_continuous(labels = scales::label_comma()) +
-  ggplot2::theme(legend.position="none",
-                 axis.title.x = ggplot2::element_text(color = seq_palette$lightgrey, hjust = 0.9),
-                 axis.title.y = ggplot2::element_text(color = seq_palette$lightgrey))
+# budgets <- tibble::tibble(budget = seq(0, 10000000, 1000000))
+# 
+# vis_curves <- curve_params |> 
+#   unnest(cols = model_params) |> 
+#   select(channel, term, estimate) |> 
+#   pivot_wider(names_from = term, values_from = estimate) |> 
+#   crossing(budgets) |> 
+#   mutate(lift = a*(1-exp(-budget/b))) |> 
+#   group_by(channel) |> 
+#   dplyr::mutate(label = ifelse(lift == max(lift), channel, NA))
+# 
+# vis_curves |> 
+#   dplyr::mutate(label = ifelse(lift == max(lift), channel, NA)) |> 
+#   ggplot2::ggplot(ggplot2::aes(x = budget, y = lift, colour = channel)) +
+#   ggplot2::geom_line() +
+#   ggplot2::geom_label(ggplot2::aes(label = label)) +
+#   seq_ggplot_minimal() +
+#   ggplot2::xlab("Annual Spend") +
+#   ggplot2::ylab("Uplift") +
+#   ggplot2::scale_y_continuous(labels = scales::label_comma()) +
+#   ggplot2::scale_x_continuous(labels = scales::label_comma()) +
+#   ggplot2::theme(legend.position="none",
+#                  axis.title.x = ggplot2::element_text(color = seq_palette$lightgrey, hjust = 0.9),
+#                  axis.title.y = ggplot2::element_text(color = seq_palette$lightgrey))
 
 ```

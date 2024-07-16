@@ -19,7 +19,7 @@ library(optimR)
 
 selenium_docker_string()
 
-laydown <- schedule |> 
+laydown <- schedule_demo() |> 
   optimise_schedule(max_budget = 1000000, step = 100000)
 
 laydown |> 
