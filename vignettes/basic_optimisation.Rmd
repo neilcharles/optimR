@@ -17,7 +17,7 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(optimR)
 
-schedule <- schedule_demo()
+selenium_docker_string()
 
 laydown <- schedule |> 
   optimise_schedule(max_budget = 1000000, step = 100000)

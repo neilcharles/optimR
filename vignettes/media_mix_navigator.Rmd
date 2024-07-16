@@ -27,6 +27,9 @@ options(scipen = 999)
 
 ```{r setup}
 
+# Get docker run command
+# schedule <- schedule_demo()
+
 remDr <- connect_selenium()
 
 scenarios <- 
