@@ -344,7 +344,8 @@ optimise_schedule <- function(schedule, max_budget = NULL, step = NULL){
     # Unnests the schedule to get a list of opportunities, tests them and then increments spend on the schedule itself
     items <- schedule |>
       unnest_schedule() |>
-      dplyr::mutate(marginal_uplift = 0)
+      dplyr::mutate(marginal_uplift = 0) |>
+      filter(spend < max_spend) #simple max spend application for now
 
     pb$tick()
 
