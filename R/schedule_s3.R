@@ -345,7 +345,7 @@ optimise_schedule <- function(schedule, max_budget = NULL, step = NULL){
     items <- schedule |>
       unnest_schedule() |>
       dplyr::mutate(marginal_uplift = 0) |>
-      filter(spend < max_spend) #simple max spend application for now
+      dplyr::filter(spend < max_spend) #simple max spend application for now
 
     pb$tick()
 
