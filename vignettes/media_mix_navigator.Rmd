@@ -28,7 +28,7 @@ options(scipen = 999)
 ```{r}
 
 # Get docker run command
-# schedule <- schedule_demo()
+# selenium_docker_string()
 
 # remDr <- connect_selenium()
 # 

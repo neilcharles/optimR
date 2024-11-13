@@ -110,7 +110,12 @@ media <-
            weight_metric = "GRP",
            alpha = numeric(),
            beta = numeric(),
-           decay = numeric()) {
+           decay = numeric(),
+           start_date = date(),
+           end_date = date(),
+           spend = numeric(),
+           cost_per = numeric(),
+           weight = numeric()) {
     media <- tibble::tibble(
       media_id = uuid::UUIDgenerate(),
       media_name = name,
@@ -119,17 +124,13 @@ media <-
       alpha = alpha,
       beta = beta,
       decay = decay,
-    budget = list(
-      tibble::tibble(
-        spend = numeric(),
-        cost_per = numeric(),
-        weight = numeric(),
-        weight_decayed = numeric(),
-        uplift = numeric(),
-        min_spend = numeric(),
-        max_spend = numeric(),
-        threshold_spend = numeric()
-      )
+      start_date,
+      end_date,
+      spend,
+      cost_per,
+      weight,
+    laydown = list(
+      laydown()
     )
     )
 
@@ -138,6 +139,46 @@ media <-
     media
   }
 
+#' Defines a new laydown object
+#'
+#' @param distribution Spread of media budget across time. Must sum to 1.
+#' @param spend Spread of spend across time. Must sum to total spend.
+#' @param weight Spread of weight across time. Must sum to total weight.
+#' @param weight_decayed Decayed weight variable. May require extension of end_date for long decays.
+#' @param uplift Calculated uplift
+#' @param min_spend Min spend for optimisation
+#' @param max_spend Max spend for optimisation
+#' @param threshold_spend Threshold spend for optimisation
+#'
+#' @return laydown
+#' @export
+#'
+#' @examples
+laydown <- function(
+    distribution = numeric(),
+    spend = numeric(),
+    weight = numeric(),
+    weight_decayed = numeric(),
+    uplift = numeric(),
+    min_spend = numeric(),
+    max_spend = numeric(),
+    threshold_spend = numeric()
+){
+  laydown <- tibble::tibble(
+    distribution = distribution,
+    spend = spend,
+    weight = weight,
+    weight_decayed = weight_decayed,
+    uplift = uplift,
+    min_spend = min_spend,
+    max_spend = max_spend,
+    threshold_spend = threshold_spend
+  )
+
+  class(laydown) <- append("laydown", class(laydown))
+
+  laydown
+}
 
 #' Add a media line to a campaign
 #'
@@ -257,6 +298,7 @@ set_media_laydown <- function(schedule = NULL, campaign = NULL, media = NULL, va
 #' @examples
 unnest_schedule <- function(schedule, level = "date"){
   unnested <- schedule |>
+    dplyr::select(-dates) |>
     tidyr::unnest(campaign_items) |>
     dplyr::mutate(campaign_index = match(campaign_id, unique(campaign_id))) |>
     dplyr::group_by(campaign_id) |>
