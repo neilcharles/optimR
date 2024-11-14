@@ -40,7 +40,7 @@ create_schedule <-
       dates = list(tibble::tibble(date = seq.Date(
         as.Date(start_date), as.Date(end_date), granularity
       ))),
-      campaign_items = list(campaign())
+      campaign_items = list(campaign()[0,])
     )
 
     schedule |>
@@ -61,12 +61,12 @@ create_schedule <-
 #' @export
 #'
 #' @examples
-campaign <- function(name = character(), product = character()) {
+campaign <- function(name = character(1), product = character(1)) {
   campaign <- tibble::tibble(
     campaign_id = uuid::UUIDgenerate(),
     campaign_name = name,
     product = product,
-    media_items = list(media())
+    media_items = list(media()[0,])
   )
 
   class(campaign) <- append("campaign", class(campaign))
@@ -105,17 +105,18 @@ add_campaign <- function(schedule, campaign) {
 #'
 #' @examples
 media <-
-  function(name = character(),
-           type = character(),
-           weight_metric = "GRP",
-           alpha = numeric(),
-           beta = numeric(),
-           decay = numeric(),
-           start_date = date(),
-           end_date = date(),
-           spend = numeric(),
-           cost_per = numeric(),
-           weight = numeric()) {
+  function(name = character(1),
+           type = character(1),
+           weight_metric = character(1),
+           alpha = numeric(1),
+           beta = numeric(1),
+           decay = numeric(1),
+           start_date = lubridate::floor_date(lubridate::today(), "year"),
+           end_date = lubridate::floor_date(lubridate::today(), "year"),
+           spend = numeric(1),
+           cost_per = numeric(1),
+           weight = numeric(1)) {
+
     media <- tibble::tibble(
       media_id = uuid::UUIDgenerate(),
       media_name = name,
@@ -155,6 +156,7 @@ media <-
 #'
 #' @examples
 laydown <- function(
+    date = numeric(),
     distribution = numeric(),
     spend = numeric(),
     weight = numeric(),
@@ -165,6 +167,7 @@ laydown <- function(
     threshold_spend = numeric()
 ){
   laydown <- tibble::tibble(
+    date = date,
     distribution = distribution,
     spend = spend,
     weight = weight,
@@ -194,22 +197,19 @@ add_media <- function(schedule, campaign, media){
 
   if(is.null(schedule$campaign_items[[1]][campaign,])) stop("Campaign doesn't exist")
 
-  #Initialise budgets and constraints as zero
-  budget <- tibble::tibble(spend = rep(0,nrow(schedule$dates[[1]])),
-                           cost_per = rep(1,nrow(schedule$dates[[1]])),
-                           weight = rep(0,nrow(schedule$dates[[1]])),
-                           weight_decayed = rep(0,nrow(schedule$dates[[1]])),
-                           uplift = rep(0,nrow(schedule$dates[[1]])),
-                           min_spend = rep(0,nrow(schedule$dates[[1]])),
-                           max_spend = rep(Inf,nrow(schedule$dates[[1]])),
-                           threshold_spend = rep(0,nrow(schedule$dates[[1]]))
+  date_range <- seq.Date(as.Date(media$start_date), as.Date(media$end_date), schedule$granularity)
+
+  media$laydown[[1]] <- laydown(
+    date = date_range,
+    distribution = rep(1/length(date_range), length(date_range)),
+    spend = rep(0, length(date_range)),
+    weight = rep(0, length(date_range)),
+    weight_decayed = rep(0, length(date_range)),
+    uplift = rep(0, length(date_range)),
+    min_spend = rep(0, length(date_range)),
+    max_spend = rep(Inf, length(date_range)),
+    threshold_spend = rep(0, length(date_range))
   )
-
-  #Make sure no budget rows exist
-  media$budget[[1]] <- media$budget[[1]][0,]
-
-  media$budget[[1]] <- media$budget[[1]] |>
-    dplyr::bind_rows(budget)
 
   schedule$campaign_items[[1]][campaign,] <- schedule$campaign_items[[1]][campaign,] |>
     dplyr::mutate(media_items = purrr::map(media_items, .f = ~ dplyr::bind_rows(.x, media)))
