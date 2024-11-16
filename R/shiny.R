@@ -29,8 +29,8 @@ maintain_schedule_interactive <- function(schedule){
       # shiny::uiOutput("campaign_select"),
       # shiny::uiOutput("media_select"),
       # rhandsontable::rHandsontableOutput("editable_table")
-      schedule_timevisUI("gantt"),
-      gt::gt_output("gantt_table")
+      schedule_timevisUI("gantt")
+      # gt::gt_output("gantt_table")
   )
 
   server <- function(input, output, session) {
@@ -69,18 +69,20 @@ maintain_schedule_interactive <- function(schedule){
     schedule_timevisServer("gantt", schedule)
 
     output$gantt_table <- gt::render_gt({
-        shiny::req(input$gantt_data)
 
-        input$gantt_data |>
+      shiny::req(input$`gantt-gantt_data`)
+
+      input$`gantt-gantt_data` |>
           dplyr::filter(id %in% input$gantt_selected) |>
           dplyr::select(dplyr::contains("media_"), -media_id) |>
-          #NEED TO SELECT START END ETC.
+          # NEED TO SELECT START END ETC.
           dplyr::rename_all(~stringr::str_replace(.,"media_","")) |>
           gt::gt() |>
           sequenceR::seq_gt_theme()
     })
 
     shiny::observeEvent(input$uiCommit, {
+
       amended_schedule <- input$gantt_data |>
         dplyr::mutate(
           media_name = content,
@@ -88,11 +90,25 @@ maintain_schedule_interactive <- function(schedule){
           media_end_date = lubridate::as_date(end),
         ) |>
         dplyr::select(-id, -content, -start, -end, -editable) |>
-        nest_schedule()
+        schedule_nest()
 
       # https://stackoverflow.com/questions/32944961/modify-global-data-from-within-a-function-in-r
       assign(global_schedule_obj, amended_schedule, envir =  globalenv())
     })
+
+    schedule_edit_mediaServer("selected_media")
+
+    observeEvent(input$`gantt-gantt_selected`, {
+
+      req(input$`gantt-gantt_selected`)
+
+      shiny::showModal(
+        shiny::modalDialog(
+          schedule_edit_mediaUI("selected_media"),
+          easyClose = TRUE)
+      )
+
+        })
 
   }
 

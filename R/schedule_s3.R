@@ -318,7 +318,7 @@ unnest_schedule <- function(schedule, level = "date"){
 #' @export
 #'
 #' @examples
-nest_schedule <- function(unnested_schedule){
+schedule_nest <- function(unnested_schedule){
   nested <- unnested_schedule |>
     dplyr::select(-contains("_index")) |>
     dplyr::ungroup() |>
