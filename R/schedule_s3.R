@@ -7,12 +7,13 @@
 #' test_schedule <- schedule_demo()
 schedule_demo <- function() {
   demo <- create_schedule("my plan", "2023-01-01", "2023-12-01") |>
-    add_campaign(campaign("my first campaign", "stuff")) |>
-    add_media(1, media("TV", "TV", alpha = 10, beta = 50000, decay = 0.5)) |>
-    add_media(1, media("radio", "radio", alpha = 7, beta = 20000, decay = 0.8)) |>
-    add_campaign(campaign("my second campaign", "more stuff")) |>
-    add_media(2, media("TV", "TV", alpha = 12, beta = 35000, decay = 0.6)) |>
-    add_media(2, media("radio", "radio", alpha = 9, beta = 15000, decay = 0.85))
+    add_campaign(campaign("First Campaign", "This is the first campaign")) |>
+    add_media(1, media(media_type = "TV", media_name = "ITV", media_start_date = "2024-01-01", media_end_date = "2024-03-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 1000000)) |>
+    add_media(1, media(media_type = "TV", media_name = "Channel4", media_start_date = "2024-01-01", media_end_date = "2024-03-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 100000)) |>
+    add_media(1, media(media_type = "Radio", media_name = "Absolute Radio", media_start_date = "2024-01-01", media_end_date = "2024-02-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 1000)) |>
+    add_campaign(campaign("Second Campaign", "This is the second campaign")) |>
+    add_media(2, media(media_type = "Outdoor", media_name = "Kinetic", media_start_date = "2024-03-01", media_end_date = "2024-04-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 50000)) |>
+    add_media(2, media(media_type = "Search", media_name = "Google", media_start_date = "2024-03-01", media_end_date = "2024-05-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 500))
 
   demo
 }
@@ -30,21 +31,15 @@ schedule_demo <- function() {
 #'
 #' @examples
 create_schedule <-
-  function(name, start_date, end_date, granularity = "month") {
+  function(schedule_name, schedule_start_date, schedule_end_date, schedule_granularity = "month") {
     schedule <- tibble::tibble(
       schedule_id = uuid::UUIDgenerate(),
-      schedule_name = name,
-      start_date = start_date,
-      end_date = end_date,
-      granularity = granularity,
-      dates = list(tibble::tibble(date = seq.Date(
-        as.Date(start_date), as.Date(end_date), granularity
-      ))),
+      schedule_name = schedule_name,
+      schedule_start_date = schedule_start_date,
+      schedule_end_date = schedule_end_date,
+      schedule_granularity = schedule_granularity,
       campaign_items = list(campaign()[0,])
     )
-
-    schedule |>
-      tidyr::unnest(dates)
 
     class(schedule) <- append("schedule", class(schedule))
 
@@ -61,11 +56,11 @@ create_schedule <-
 #' @export
 #'
 #' @examples
-campaign <- function(name = character(1), product = character(1)) {
+campaign <- function(campaign_name = character(1), campaign_product = character(1)) {
   campaign <- tibble::tibble(
     campaign_id = uuid::UUIDgenerate(),
-    campaign_name = name,
-    product = product,
+    campaign_name = campaign_name,
+    campaign_product = campaign_product,
     media_items = list(media()[0,])
   )
 
@@ -105,31 +100,31 @@ add_campaign <- function(schedule, campaign) {
 #'
 #' @examples
 media <-
-  function(name = character(1),
-           type = character(1),
-           weight_metric = character(1),
-           alpha = numeric(1),
-           beta = numeric(1),
-           decay = numeric(1),
-           start_date = lubridate::floor_date(lubridate::today(), "year"),
-           end_date = lubridate::floor_date(lubridate::today(), "year"),
-           spend = numeric(1),
-           cost_per = numeric(1),
-           weight = numeric(1)) {
+  function(media_name = character(1),
+           media_type = character(1),
+           media_weight_metric = character(1),
+           media_alpha = numeric(1),
+           media_beta = numeric(1),
+           media_decay = numeric(1),
+           media_start_date = lubridate::floor_date(lubridate::today(), "year"),
+           media_end_date = lubridate::floor_date(lubridate::today(), "year"),
+           media_spend = numeric(1),
+           media_cost_per = numeric(1),
+           media_weight = numeric(1)) {
 
     media <- tibble::tibble(
       media_id = uuid::UUIDgenerate(),
-      media_name = name,
-      media_type = type,
-      weight_metric = weight_metric,
-      alpha = alpha,
-      beta = beta,
-      decay = decay,
-      start_date,
-      end_date,
-      spend,
-      cost_per,
-      weight,
+      media_name = media_name,
+      media_type = media_type,
+      media_weight_metric = media_weight_metric,
+      media_alpha = media_alpha,
+      media_beta = media_beta,
+      media_decay = media_decay,
+      media_start_date = lubridate::as_date(media_start_date),
+      media_end_date = lubridate::as_date(media_end_date),
+      media_spend = media_spend,
+      media_cost_per = media_cost_per,
+      media_weight = media_weight,
     laydown = list(
       laydown()
     )
@@ -156,26 +151,26 @@ media <-
 #'
 #' @examples
 laydown <- function(
-    date = numeric(),
-    distribution = numeric(),
-    spend = numeric(),
-    weight = numeric(),
-    weight_decayed = numeric(),
-    uplift = numeric(),
-    min_spend = numeric(),
-    max_spend = numeric(),
-    threshold_spend = numeric()
+    laydown_date = numeric(),
+    laydown_distribution = numeric(),
+    laydown_spend = numeric(),
+    laydown_weight = numeric(),
+    laydown_weight_decayed = numeric(),
+    laydown_uplift = numeric(),
+    laydown_min_spend = numeric(),
+    laydown_max_spend = numeric(),
+    laydown_threshold_spend = numeric()
 ){
   laydown <- tibble::tibble(
-    date = date,
-    distribution = distribution,
-    spend = spend,
-    weight = weight,
-    weight_decayed = weight_decayed,
-    uplift = uplift,
-    min_spend = min_spend,
-    max_spend = max_spend,
-    threshold_spend = threshold_spend
+    laydown_date = laydown_date,
+    laydown_distribution = laydown_distribution,
+    laydown_spend = laydown_spend,
+    laydown_weight = laydown_weight,
+    laydown_weight_decayed = laydown_weight_decayed,
+    laydown_uplift = laydown_uplift,
+    laydown_min_spend = laydown_min_spend,
+    laydown_max_spend = laydown_max_spend,
+    laydown_threshold_spend = laydown_threshold_spend
   )
 
   class(laydown) <- append("laydown", class(laydown))
@@ -197,18 +192,18 @@ add_media <- function(schedule, campaign, media){
 
   if(is.null(schedule$campaign_items[[1]][campaign,])) stop("Campaign doesn't exist")
 
-  date_range <- seq.Date(as.Date(media$start_date), as.Date(media$end_date), schedule$granularity)
+  date_range <- seq.Date(as.Date(media$media_start_date), as.Date(media$media_end_date), schedule$schedule_granularity)
 
   media$laydown[[1]] <- laydown(
-    date = date_range,
-    distribution = rep(1/length(date_range), length(date_range)),
-    spend = rep(0, length(date_range)),
-    weight = rep(0, length(date_range)),
-    weight_decayed = rep(0, length(date_range)),
-    uplift = rep(0, length(date_range)),
-    min_spend = rep(0, length(date_range)),
-    max_spend = rep(Inf, length(date_range)),
-    threshold_spend = rep(0, length(date_range))
+    laydown_date = date_range,
+    laydown_distribution = rep(1/length(date_range), length(date_range)),
+    laydown_spend = rep(0, length(date_range)),
+    laydown_weight = rep(0, length(date_range)),
+    laydown_weight_decayed = rep(0, length(date_range)),
+    laydown_uplift = rep(0, length(date_range)),
+    laydown_min_spend = rep(0, length(date_range)),
+    laydown_max_spend = rep(Inf, length(date_range)),
+    laydown_threshold_spend = rep(0, length(date_range))
   )
 
   schedule$campaign_items[[1]][campaign,] <- schedule$campaign_items[[1]][campaign,] |>
@@ -298,7 +293,6 @@ set_media_laydown <- function(schedule = NULL, campaign = NULL, media = NULL, va
 #' @examples
 unnest_schedule <- function(schedule, level = "date"){
   unnested <- schedule |>
-    dplyr::select(-dates) |>
     tidyr::unnest(campaign_items) |>
     dplyr::mutate(campaign_index = match(campaign_id, unique(campaign_id))) |>
     dplyr::group_by(campaign_id) |>
@@ -307,12 +301,32 @@ unnest_schedule <- function(schedule, level = "date"){
 
   if(level=="date"){
     unnested <- unnested |>
-    tidyr::unnest(budget) |>
+    tidyr::unnest(laydown) |>
     dplyr::group_by(media_id) |>
     dplyr::mutate(date_index = dplyr::row_number())
   }
 
   unnested
+
+}
+
+#' Nests an unnested schedule created by unnest_schedule() back into a schedule object again
+#'
+#' @param unnested_schedule A tibble created by unnest_schedule()
+#'
+#' @return
+#' @export
+#'
+#' @examples
+schedule_nest <- function(unnested_schedule){
+  nested <- unnested_schedule |>
+    dplyr::select(-contains("_index")) |>
+    dplyr::ungroup() |>
+    tidyr::nest(.by = contains(c("schedule_", "campaign_", "media_")), .key = "media_items") |>
+    tidyr::nest(.by = contains(c("schedule_", "campaign_")), .key = "media_items") |>
+    tidyr::nest(.by = contains(c("schedule_")), .key = "campaign_items")
+
+  nested
 
 }
 
