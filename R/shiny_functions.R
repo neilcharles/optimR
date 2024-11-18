@@ -90,35 +90,57 @@ schedule_timevis_read <- function(timevis_output){
 }
 
 # ------------------------------------------------------------------------------
-# Schedule creation forms
+# Edit functions
 # ------------------------------------------------------------------------------
-
-schedule_edit_mediaUI <- function(id, schedule = schedule_demo()){
-  schedule |>
-    unnest_schedule() |>
-    dplyr::select(dplyr::contains("media_")) |>
-    names() |>
-    purrr::map(
-      .f = ~shiny::uiOutput(shiny::NS(id, glue::glue("input_{.}")))
-    )
+edit_recordUI <- function(id){
+  shiny::uiOutput(shiny::NS(id, "ui_elements"))
 }
 
-schedule_edit_mediaServer <- function(id, schedule = schedule_demo()){
+edit_recordServer <- function(id, record){
 
   shiny::moduleServer(id, function(input, output, session) {
 
-      schedule |>
-        unnest_schedule() |>
-        dplyr::select(dplyr::contains("media_")) |>
+    stopifnot("Must pass a reactive function ('foo') not values ('foo()')" = shiny::is.reactive(record))
+
+    record_values <- reactive({
+      record()
+    })
+
+    # if(nrow(record()) > 1) stop("Can't edit more than one record")
+
+    shiny::observe({
+      record_values() |>
         names() |>
         purrr::walk(
           .f = ~{
-              output_name <- paste0("input_", .)
-              output[[output_name]] <-
+            input_name <- paste0(.)
+            output_name <- glue::glue("input_{.}")
+            output[[output_name]] <-
               shiny::renderUI({
-              shiny::textInput(glue::glue("ui{.}"), stringr::str_to_title(stringr::str_replace_all(., "_", " ")))
-         })
+                shiny_edit_components(input_name, record_values()[[input_name]])
+              })
           }
-         )
+        )
+    })
+
+    output$ui_elements <- shiny::renderUI({
+      record_values() |>
+        names() |>
+        purrr::map(
+          .f = ~shiny::uiOutput(shiny::NS(id, glue::glue("input_{.}")))
+        )
+    })
   })
+}
+
+shiny_edit_components <- function(label, value, locked_cols = '_id'){
+  if(stringr::str_detect(label, locked_cols)){
+    shiny::p(glue::glue("{stringr::str_to_title(stringr::str_replace_all(label, '_', ' '))}: {value}"))
+  } else if(is.character(value)){
+    shiny::textInput(glue::glue("ui{label}"), stringr::str_to_title(stringr::str_replace_all(label, "_", " ")), value)
+  } else if(is.numeric(value)){
+    shiny::numericInput(glue::glue("ui{label}"), stringr::str_to_title(stringr::str_replace_all(label, "_", " ")), value)
+  } else if(lubridate::is.Date(value)){
+    shiny::dateInput(glue::glue("ui{label}"), stringr::str_to_title(stringr::str_replace_all(label, "_", " ")), value)
+  }
 }

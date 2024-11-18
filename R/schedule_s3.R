@@ -428,3 +428,72 @@ optimise_schedule <- function(schedule, max_budget = NULL, step = NULL){
   schedule
 
 }
+
+#' Given the id for a media line, returns the campaign index to which it belongs. Used internally for getting and setting values.
+#'
+#' @param schedule
+#' @param media_id_target
+#'
+#' @return
+#'
+#' @examples
+media_get_campaign_index <- function(schedule, media_id_target){
+  which(schedule$campaign_items[[1]]$campaign_id==
+          schedule |>
+            unnest_schedule(level = "media") |>
+            dplyr::filter(media_id==media_id_target) |>
+            dplyr::pull(campaign_id)
+    )
+}
+
+media_get <- function(schedule, media_id_target){
+  purrr::pluck(
+    schedule,
+    "campaign_items",
+    1,
+    "media_items",
+    media_get_campaign_index(schedule, media_id_target)
+  )[media_get_index(schedule, media_id_target), ]
+}
+
+#' Given the id for a media line, returns its index row. Used internally for getting and setting values.
+#'
+#' @param schedule
+#' @param media_id_target
+#'
+#' @return
+#'
+#' @examples
+media_get_index <- function(schedule, media_id_target){
+  which(schedule$campaign_items[[1]]$media_items[[media_get_campaign_index(schedule, media_id_target)]]$media_id==
+          media_id_target)
+}
+
+media_amend <- function(schedule, media_id_target, values = list(media_beta = 100)){
+  values |>
+    purrr::iwalk(.f = ~ {
+      purrr::pluck(
+        schedule,
+        "campaign_items",
+        1,
+        "media_items",
+        media_get_campaign_index(schedule, media_id_target),
+        .y,
+        media_get_index(schedule, media_id_target),
+      ) <- .
+    })
+}
+
+
+
+#' Print method for schedule objects
+#'
+#' @param x
+#'
+#' @return
+#' @export
+#'
+#' @examples
+print.schedule <- function(x){
+  glue::glue("optimR schedule object with {nrow(unnest_schedule(x, 'media'))} media items.")
+}
