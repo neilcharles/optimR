@@ -23,12 +23,8 @@ maintain_schedule_interactive <- function(schedule){
         ),
 
       shiny::actionButton("uiCommit", "Save Changes"),
-    shiny::hr(),
+      shiny::hr(),
 
-      # shiny::uiOutput("date_range_select"),
-      # shiny::uiOutput("campaign_select"),
-      # shiny::uiOutput("media_select"),
-      # rhandsontable::rHandsontableOutput("editable_table")
       schedule_timevisUI("gantt")
       # gt::gt_output("gantt_table")
   )
@@ -41,30 +37,6 @@ maintain_schedule_interactive <- function(schedule){
     output$loaded_schedule <- shiny::renderText(
       glue::glue("Editing: {global_schedule_obj}")
     )
-
-    output$date_range_select <- shiny::renderUI({
-      shiny::dateRangeInput("uiDateRange", "Date Range", schedule$schedule_start_date, schedule$schedule_end_date)
-    })
-
-    output$campaign_select <- shiny::renderUI({
-      shiny::selectInput("uiCampaign", "Campaign", schedule_unnest |>
-                                                     dplyr::pull(campaign_name) |>
-                                                     unique())
-    })
-
-    output$media_select <- shiny::renderUI({
-      shiny::selectInput("uiMedia", "Media", schedule_unnest |>
-                                                dplyr::filter(campaign_name==input$uiCampaign) |>
-                                                dplyr::pull(media_name) |>
-                                                unique())
-    })
-
-    output$editable_table <- rhandsontable::renderRHandsontable({
-      schedule_unnest |>
-        dplyr::filter(campaign_name %in% input$uiCampaign,
-                      media_name %in% input$uiMedia) |>
-      rhandsontable::rhandsontable()
-    })
 
     schedule_timevisServer("gantt", schedule)
 
@@ -96,16 +68,22 @@ maintain_schedule_interactive <- function(schedule){
       assign(global_schedule_obj, amended_schedule, envir =  globalenv())
     })
 
-    schedule_edit_mediaServer("selected_media")
-
-    observeEvent(input$`gantt-gantt_selected`, {
-
+    current_media <- reactive({
       req(input$`gantt-gantt_selected`)
+      media_get(schedule, input$`gantt-gantt_selected`)
+    })
+
+    edit_recordServer("selected_media", current_media)  #media_get(schedule, "47f651d7-24e1-497d-8b0b-46105b006a4a"))
+
+    observeEvent(current_media(), {
+
+      req(current_media())
 
       shiny::showModal(
         shiny::modalDialog(
-          schedule_edit_mediaUI("selected_media"),
-          easyClose = TRUE)
+          edit_recordUI("selected_media"),
+          easyClose = TRUE,
+          footer = shiny::actionButton("uiSaveMedia", "Save", icon = shiny::icon("save")))
       )
 
         })
