@@ -1,0 +1,512 @@
+laydown_date = laydown_date,
+laydown_distribution = laydown_distribution,
+laydown_spend = laydown_spend,
+laydown_weight = laydown_weight,
+laydown_weight_decayed = laydown_weight_decayed,
+laydown_uplift = laydown_uplift,
+laydown_min_spend = laydown_min_spend,
+laydown_max_spend = laydown_max_spend,
+laydown_threshold_spend = laydown_threshold_spend
+)
+class(laydown) <- append("laydown", class(laydown))
+laydown
+}
+#' Add a media line to a campaign
+#'
+#' @param schedule A schedule object
+#' @param campaign Campaign index number
+#' @param media A media object
+#'
+#' @return A schedule containing the new media line
+#' @export
+#'
+#' @examples
+add_media <- function(schedule, campaign, media){
+if(is.null(schedule$campaign_items[[1]][campaign,])) stop("Campaign doesn't exist")
+date_range <- seq.Date(as.Date(media$media_start_date), as.Date(media$media_end_date), schedule$schedule_granularity)
+media$laydown[[1]] <- laydown(
+laydown_date = date_range,
+laydown_distribution = rep(1/length(date_range), length(date_range)),
+laydown_spend = rep(0, length(date_range)),
+laydown_weight = rep(0, length(date_range)),
+laydown_weight_decayed = rep(0, length(date_range)),
+laydown_uplift = rep(0, length(date_range)),
+laydown_min_spend = rep(0, length(date_range)),
+laydown_max_spend = rep(Inf, length(date_range)),
+laydown_threshold_spend = rep(0, length(date_range))
+)
+schedule$campaign_items[[1]][campaign,] <- schedule$campaign_items[[1]][campaign,] |>
+dplyr::mutate(media_items = purrr::map(media_items, .f = ~ dplyr::bind_rows(.x, media)))
+schedule
+}
+#' Sets spend or weight for a media line or a single date within a media line and recalculates dependent metrics
+#'
+#' @param schedule A schedule object
+#' @param campaign Campaign index number
+#' @param media Media index number
+#' @param values Values to set for spend or weight
+#' @param metric "spend" or "weight"
+#' @param index Optional date index to use if setting only one value
+#'
+#' @return An amended schedule object
+#' @export
+#'
+#' @examples
+set_media_laydown <- function(schedule = NULL, campaign = NULL, media = NULL, values = NULL, date_index = NULL, metric = "spend"){
+if(is.null(schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,])) stop("Media doesn't exist")
+#Set a single value rather than the whole laydown
+if(!is.null(date_index)){
+if(length(values) > 1) stop('When setting a value with date index you can only pass a single value')
+laydown <- dplyr::pull(schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]], metric)
+laydown[date_index] <- values
+values <- laydown
+}
+#Check that values is the right length
+expected_length <- nrow(schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]])
+if(length(values) != expected_length){
+stop(glue::glue('`values` must be length {expected_length}'))
+}
+if(metric=="spend"){
+#Set spend and calculate weight
+schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]] <-
+schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]] |>
+dplyr::mutate(spend = values) |>
+dplyr::mutate(weight = spend / cost_per)
+} else if(metric=="weight"){
+#Set weight and calculate spend
+schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]] <-
+schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]] |>
+dplyr::mutate(weight = values) |>
+dplyr::mutate(spend = weight * cost_per)
+} else {
+stop('Unknown metric')
+}
+#Decay weight
+decay <- schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$decay
+schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]] <-
+schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]] |>
+dplyr::mutate(weight_decayed = stats::filter(weight, decay, "recursive"))
+#Calculate uplift
+alpha <- schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$alpha
+beta <- schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$beta
+schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]] <-
+schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]] |>
+dplyr::mutate(uplift = calculate_curve(weight_decayed, alpha, beta))
+schedule
+}
+#' Unnests a schedule object into a tibble. Used internally by optimR for optimisation runs and charting.
+#'
+#' @param schedule An optimR media schedule
+#' @param level The level to unnest to. Can be "date" (fully unnested), or "media", which will leave dates nested
+#'
+#' @return
+#' @export
+#'
+#' @examples
+unnest_schedule <- function(schedule, level = "date"){
+unnested <- schedule |>
+tidyr::unnest(campaign_items) |>
+dplyr::mutate(campaign_index = match(campaign_id, unique(campaign_id))) |>
+dplyr::group_by(campaign_id) |>
+tidyr::unnest(media_items) |>
+dplyr::mutate(media_index = match(media_id, unique(media_id)))
+if(level=="date"){
+unnested <- unnested |>
+tidyr::unnest(laydown) |>
+dplyr::group_by(media_id) |>
+dplyr::mutate(date_index = dplyr::row_number())
+}
+unnested
+}
+#' Nests an unnested schedule created by unnest_schedule() back into a schedule object again
+#'
+#' @param unnested_schedule A tibble created by unnest_schedule()
+#'
+#' @return
+#' @export
+#'
+#' @examples
+schedule_nest <- function(unnested_schedule){
+nested <- unnested_schedule |>
+dplyr::select(-contains("_index")) |>
+dplyr::ungroup() |>
+tidyr::nest(.by = contains(c("schedule_", "campaign_", "media_")), .key = "media_items") |>
+tidyr::nest(.by = contains(c("schedule_", "campaign_")), .key = "media_items") |>
+tidyr::nest(.by = contains(c("schedule_")), .key = "campaign_items")
+nested
+}
+#' Returns the total uplift generated by a schedule
+#'
+#' @param schedule
+#'
+#' @return Total uplift from a schedule
+#' @export
+#'
+#' @examples
+sum_uplift_schedule <- function(schedule){
+schedule |>
+unnest_schedule() |>
+dplyr::pull(uplift) |>
+sum()
+}
+#' Increments spend for one media on one date and returns the uplift difference generated. Used internally for optimisation runs.
+#'
+#' @param schedule
+#' @param campaign
+#' @param media
+#' @param date_index
+#' @param increment
+#'
+#' @return
+#' @export
+#'
+#' @examples
+test_increment <- function(schedule, campaign, media, date_index, increment){
+original_uplift <- sum_uplift_schedule(schedule)
+original_spend <- schedule$campaign_items[[1]][campaign,]$media_items[[1]][media,]$budget[[1]]$spend[date_index]
+new_schedule <- set_media_laydown(schedule,
+campaign = campaign, #campaign_index,
+media = media, #media_index,
+values = original_spend + increment, #budget_steps,
+date_index = date_index) #date_index)
+new_uplift <- sum_uplift_schedule(new_schedule)
+new_uplift - original_uplift
+}
+#' Optimises a schedule
+#'
+#' @param schedule
+#' @param max_budget
+#' @param step
+#'
+#' @return An optimised schedule
+#' @export
+#'
+#' @examples
+optimise_schedule <- function(schedule, max_budget = NULL, step = NULL){
+# Loop through opportunities, hill climbing the most effective next step
+# You cannot optimise this step by only calculating uplift for some of the rows unless media are not allowed to affect each other
+# (which they are, so don't do it)
+budget_steps <- seq(step, max_budget, step)
+pb <- progress::progress_bar$new(total = length(budget_steps))
+for(i in budget_steps){
+# Unnests the schedule to get a list of opportunities, tests them and then increments spend on the schedule itself
+items <- schedule |>
+unnest_schedule() |>
+dplyr::mutate(marginal_uplift = 0) |>
+dplyr::filter(spend < max_spend) #simple max spend application for now
+pb$tick()
+marginal_uplifts <- items |>
+dplyr::rowwise() |>
+dplyr::mutate(marginal_uplift = test_increment(schedule, campaign_index, media_index, date_index, step))
+# [1] picks the first max in the event of a tie
+max_item <- which(marginal_uplifts$marginal_uplift==max(marginal_uplifts$marginal_uplift))[1]
+max_item_details <- marginal_uplifts[max_item,]
+# Amend the schedule to increment the max spend option
+schedule <-
+set_media_laydown(
+schedule,
+campaign = max_item_details$campaign_index,
+media = max_item_details$media_index,
+date_index = max_item_details$date_index,
+values = max_item_details$spend + step
+)
+}
+schedule
+}
+print.schedule <- function(x){
+glue::glue("optimR schedule object with {nrow(unnest_schedule(x, 'media'))} media items.")
+}
+print(schedule)
+source("~/Documents/dev/optimR/R/schedule_s3.R", echo=TRUE)
+devtools::load_all(".")
+schedule |>
+purrr::pluck("media_id")
+devtools::load_all(".")
+schedule <- schedule_demo()
+schedule |>
+purrr::pluck("media_id")
+schedule |>
+purrr::pluck("campaign_items", 1, "media_tems", 1)
+schedule |>
+purrr::pluck("campaign_items", 1, "media_tems")
+schedule
+schedule |>
+purrr::pluck("campaign_items", 1)
+schedule |>
+purrr::pluck("campaign_items", 1, "media_items")
+schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1)
+schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_beta", 1)
+schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_beta", 1) <- 1
+schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_beta", 1)
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_id", 1)
+purrr::pluck("campaign_items", 1, "media_items", 1)
+schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_id", 1)
+id <- schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_id", 1)
+values = list(media_beta = 100)
+values
+values[1]
+values[[1]]
+schedule |>
+unnest_schedule()
+schedule |>
+unnest_schedule() |>
+dplyr::filter(media_id==media_id) |>
+pull(campaign_id)
+schedule |>
+unnest_schedule() |>
+dplyr::filter(media_id==media_id) |>
+dplyr::pull(campaign_id)
+schedule |>
+unnest_schedule(level = "media") |>
+dplyr::filter(media_id==media_id) |>
+dplyr::pull(campaign_id)
+media_id
+media_id <- schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_id", 1)
+schedule |>
+unnest_schedule(level = "media") |>
+dplyr::filter(media_id==media_id) |>
+dplyr::pull(campaign_id)
+media_id
+schedule |>
+unnest_schedule(level = "media") |>
+dplyr::filter(media_id==media_id) |>
+dplyr::pull(campaign_id)
+media_id_target <- schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_id", 1)
+schedule |>
+unnest_schedule(level = "media") |>
+dplyr::filter(media_id==media_id_target) |>
+dplyr::pull(campaign_id)
+which(schedule$campaign_items[[1]]$campaign_id),
+which(schedule$campaign_items[[1]]$campaign_id)=
+schedule |>
+unnest_schedule(level = "media") |>
+dplyr::filter(media_id==media_id_target) |>
+dplyr::pull(campaign_id)
+which(schedule$campaign_items[[1]]$campaign_id)==
+schedule |>
+unnest_schedule(level = "media") |>
+dplyr::filter(media_id==media_id_target) |>
+dplyr::pull(campaign_id)
+which(schedule$campaign_items[[1]]$campaign_id==
+schedule |>
+unnest_schedule(level = "media") |>
+dplyr::filter(media_id==media_id_target) |>
+dplyr::pull(campaign_id)
+)
+devtools::load_all(".")
+schedule |>
+purrr::pluck("campaign_items", media_get_campaign_index(schedule, media_id), "media_items", 1, "media_beta", 1) <- values[[1]]
+schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_beta", 1) <- 1
+schedule |>
+purrr::pluck("campaign_items", media_get_campaign_index(schedule, media_id), "media_items", 1, "media_beta", 1) <- values[[1]]
+media_id_target <- schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_id", 1)
+schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1)
+values |>
+purrr::walk(.f = ~{
+browser()
+purrr::pluck(schedule,
+"campaign_items",
+media_get_campaign_index(schedule, media_id),
+"media_items",
+1,
+., 1
+) <- values[[1]]
+}
+)
+.
+names(.)
+values
+.
+values |>
+purrr::iwalk(.f = ~{
+browser()
+purrr::pluck(schedule,
+"campaign_items",
+media_get_campaign_index(schedule, media_id),
+"media_items",
+1,
+., 1
+) <- .
+}
+)
+.
+.y
+.x
+which(schedule$campaign_items[[1]]$media_items[[media_get_campaign_index(schedule, media_id_target)]]$media_id==
+media_id_target)
+schedule |>
+purrr::pluck("campaign_items", 1, "media_items", 1, "media_beta")
+values |>
+purrr::iwalk(.f = ~ {
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id),
+.y,
+media_get_index(media_id),
+) <- .
+})
+devtools::load_all(".")
+values |>
+purrr::iwalk(.f = ~ {
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id),
+.y,
+media_get_index(media_id),
+) <- .
+})
+values |>
+purrr::iwalk(.f = ~ {
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id),
+.y,
+media_get_index(media_id),
+) <- .
+})
+media_get_campaign_index(schedule, media_id)
+media_get_index(media_id)
+media_get_index(schedule, media_id)
+values |>
+purrr::iwalk(.f = ~ {
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id),
+.y,
+media_get_index(schedule, media_id),
+) <- .
+})
+values |>
+purrr::iwalk(.f = ~ {
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id),
+.y,
+media_get_index(schedule, media_id),
+) <- .
+})
+values
+shiny::icon("disk")
+shiny::showModal(
+shiny::modalDialog(
+edit_recordUI("selected_media", test$campaign_items[[1]]$media_items[[1]][1,]),
+shiny::actionButton("uiSaveMedia", "Save", icon = shiny::icon("save"))
+easyClose = TRUE)
+shiny::icon("save")
+devtools::load_all(".")
+devtools::load_all(".")
+devtools::load_all(".")
+devtools::load_all(".")
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id),
+.y,
+media_get_index(schedule, media_id),
+)
+devtools::load_all(".")
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id),
+.y,
+media_get_index(schedule, media_id),
+)
+devtools::load_all(".")
+devtools::load_all(".")
+#' Given the id for a media line, returns the campaign index to which it belongs. Used internally for getting and setting values.
+#'
+#' @param schedule
+#' @param media_id_target
+#'
+#' @return
+#'
+#' @examples
+media_get_campaign_index <- function(schedule, media_id_target){
+which(schedule$campaign_items[[1]]$campaign_id==
+schedule |>
+unnest_schedule(level = "media") |>
+dplyr::filter(media_id==media_id_target) |>
+dplyr::pull(campaign_id)
+)
+}
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id),
+.y,
+media_get_index(schedule, media_id),
+)
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id)
+)
+purrr::pluck(
+schedule,
+"campaign_items",
+1)
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id)
+)
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id)
+)[media_get_index(schedule, media_id)]
+purrr::pluck(
+schedule,
+"campaign_items",
+1,
+"media_items",
+media_get_campaign_index(schedule, media_id)
+)[media_get_index(schedule, media_id),]
+source("~/Documents/dev/optimR/R/shiny.R")
+devtools::load_all(".")
+maintain_schedule_interactive(test)
+maintain_schedule_interactive(schedule)
+devtools::load_all(".")
+devtools::load_all(".")
+maintain_schedule_interactive(schedule)
+devtools::load_all(".")
+maintain_schedule_interactive(schedule)

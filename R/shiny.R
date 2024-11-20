@@ -24,34 +24,17 @@ maintain_schedule_interactive <- function(schedule){
 
       shiny::actionButton("uiCommit", "Save Changes"),
       shiny::hr(),
-
-      schedule_timevisUI("gantt")
+      campaignEditUI("edit_campaign")
       # gt::gt_output("gantt_table")
   )
 
   server <- function(input, output, session) {
 
-    schedule_unnest <- schedule |>
-      unnest_schedule(level = "media")
-
     output$loaded_schedule <- shiny::renderText(
       glue::glue("Editing: {global_schedule_obj}")
     )
 
-    schedule_timevisServer("gantt", schedule)
-
-    output$gantt_table <- gt::render_gt({
-
-      shiny::req(input$`gantt-gantt_data`)
-
-      input$`gantt-gantt_data` |>
-          dplyr::filter(id %in% input$gantt_selected) |>
-          dplyr::select(dplyr::contains("media_"), -media_id) |>
-          # NEED TO SELECT START END ETC.
-          dplyr::rename_all(~stringr::str_replace(.,"media_","")) |>
-          gt::gt() |>
-          sequenceR::seq_gt_theme()
-    })
+    campaignEditServer("edit_campaign", schedule)
 
     shiny::observeEvent(input$uiCommit, {
 
@@ -68,27 +51,8 @@ maintain_schedule_interactive <- function(schedule){
       assign(global_schedule_obj, amended_schedule, envir =  globalenv())
     })
 
-    current_media <- reactive({
-      req(input$`gantt-gantt_selected`)
-      media_get(schedule, input$`gantt-gantt_selected`)
-    })
-
-    edit_recordServer("selected_media", current_media)  #media_get(schedule, "47f651d7-24e1-497d-8b0b-46105b006a4a"))
-
-    observeEvent(current_media(), {
-
-      req(current_media())
-
-      shiny::showModal(
-        shiny::modalDialog(
-          edit_recordUI("selected_media"),
-          easyClose = TRUE,
-          footer = shiny::actionButton("uiSaveMedia", "Save", icon = shiny::icon("save")))
-      )
-
-        })
-
   }
 
   shiny::runGadget(ui, server, viewer = shiny::paneViewer())
+
 }

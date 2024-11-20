@@ -291,22 +291,29 @@ set_media_laydown <- function(schedule = NULL, campaign = NULL, media = NULL, va
 #' @export
 #'
 #' @examples
-unnest_schedule <- function(schedule, level = "date"){
+unnest_schedule <- function(schedule, level = "media"){
+
   unnested <- schedule |>
     tidyr::unnest(campaign_items) |>
-    dplyr::mutate(campaign_index = match(campaign_id, unique(campaign_id))) |>
+    dplyr::mutate(campaign_index = match(campaign_id, unique(campaign_id)))
+
+  if(level=="campaign") return(unnested)
+
+  unnested <- unnested |>
     dplyr::group_by(campaign_id) |>
     tidyr::unnest(media_items) |>
     dplyr::mutate(media_index = match(media_id, unique(media_id)))
 
-  if(level=="date"){
-    unnested <- unnested |>
+  if(level=="media") return(unnested)
+
+  unnested <- unnested |>
     tidyr::unnest(laydown) |>
     dplyr::group_by(media_id) |>
     dplyr::mutate(date_index = dplyr::row_number())
-  }
 
-  unnested
+  if(level=="laydown") return(unnested)
+
+  stop(glue::glue("Valid options for level are 'campaign', 'media' or 'laydown'. You requested {level}."))
 
 }
 
@@ -469,19 +476,24 @@ media_get_index <- function(schedule, media_id_target){
           media_id_target)
 }
 
-media_amend <- function(schedule, media_id_target, values = list(media_beta = 100)){
+media_amend <- function(schedule, media_id_target, values = list()){
+
+  schedule_amended <- schedule
+
   values |>
     purrr::iwalk(.f = ~ {
       purrr::pluck(
-        schedule,
+        schedule_amended,
         "campaign_items",
         1,
         "media_items",
         media_get_campaign_index(schedule, media_id_target),
-        .y,
+        !!!.y,
         media_get_index(schedule, media_id_target),
-      ) <- .
+      ) <<- .
     })
+
+  schedule_amended
 }
 
 
