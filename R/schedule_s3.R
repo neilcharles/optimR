@@ -8,12 +8,12 @@
 schedule_demo <- function() {
   demo <- create_schedule("my plan", "2023-01-01", "2023-12-01") |>
     add_campaign(campaign("First Campaign", "This is the first campaign")) |>
-    add_media(1, media(media_type = "TV", media_name = "ITV", media_start_date = "2024-01-01", media_end_date = "2024-03-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 1000000)) |>
-    add_media(1, media(media_type = "TV", media_name = "Channel4", media_start_date = "2024-01-01", media_end_date = "2024-03-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 100000)) |>
-    add_media(1, media(media_type = "Radio", media_name = "Absolute Radio", media_start_date = "2024-01-01", media_end_date = "2024-02-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 1000)) |>
+    add_media(1, media(media_type = "TV", media_name = "ITV", media_start_date = "2024-01-01", media_end_date = "2024-03-01", media_spend = 1000000)) |>
+    add_media(1, media(media_type = "TV", media_name = "Channel4", media_start_date = "2024-01-01", media_end_date = "2024-03-01", media_spend = 100000)) |>
+    add_media(1, media(media_type = "Radio", media_name = "Absolute Radio", media_start_date = "2024-01-01", media_end_date = "2024-02-01", media_spend = 1000)) |>
     add_campaign(campaign("Second Campaign", "This is the second campaign")) |>
-    add_media(2, media(media_type = "Outdoor", media_name = "Kinetic", media_start_date = "2024-03-01", media_end_date = "2024-04-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 50000)) |>
-    add_media(2, media(media_type = "Search", media_name = "Google", media_start_date = "2024-03-01", media_end_date = "2024-05-01", media_alpha = 10, media_beta = 50000, media_decay = 0.5, media_spend = 500))
+    add_media(2, media(media_type = "Outdoor", media_name = "Kinetic", media_start_date = "2024-03-01", media_end_date = "2024-04-01", media_spend = 50000)) |>
+    add_media(2, media(media_type = "Search", media_name = "Google", media_start_date = "2024-03-01", media_end_date = "2024-05-01", media_spend = 500))
 
   demo
 }
@@ -100,12 +100,11 @@ add_campaign <- function(schedule, campaign) {
 #'
 #' @examples
 media <-
-  function(media_name = character(1),
+  function(media_id = uuid::UUIDgenerate(),
+           media_name = character(1),
+           media_type_id = uuid::UUIDgenerate(),
            media_type = character(1),
            media_weight_metric = character(1),
-           media_alpha = numeric(1),
-           media_beta = numeric(1),
-           media_decay = numeric(1),
            media_start_date = lubridate::floor_date(lubridate::today(), "year"),
            media_end_date = lubridate::floor_date(lubridate::today(), "year"),
            media_spend = numeric(1),
@@ -113,13 +112,11 @@ media <-
            media_weight = numeric(1)) {
 
     media <- tibble::tibble(
-      media_id = uuid::UUIDgenerate(),
+      media_id = media_id,
       media_name = media_name,
+      media_type_id = media_type_id,
       media_type = media_type,
       media_weight_metric = media_weight_metric,
-      media_alpha = media_alpha,
-      media_beta = media_beta,
-      media_decay = media_decay,
       media_start_date = lubridate::as_date(media_start_date),
       media_end_date = lubridate::as_date(media_end_date),
       media_spend = media_spend,

@@ -39,8 +39,12 @@ maintain_schedule_interactive <- function(schedule){
     shiny::observeEvent(input$uiCommit, {
       # https://stackoverflow.com/questions/32944961/modify-global-data-from-within-a-function-in-r
       assign(global_schedule_obj, schedule_amended(), envir =  globalenv())
+      shiny::showModal(
+        shiny::modalDialog(
+          shiny::p("Saved")
+        )
+      )
     })
-
   }
 
   shiny::runGadget(ui, server, viewer = shiny::paneViewer())

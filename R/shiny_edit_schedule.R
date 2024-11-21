@@ -5,20 +5,27 @@
 #' @return list(items = timevis_items, groups = final_groups)
 #'
 #' @examples
-schedule_timevis_prep <- function(schedule){
+schedule_timevis_prep <- function(schedule, unnested = TRUE){
+
+  options(scipen = 999)
+
+  if(!unnested){
+    schedule <- schedule |>
+      unnest_schedule(level = "media")
+  }
+
   # Unnest to media level and add timevis variables
   timevis_items <- schedule |>
-    unnest_schedule(level = "media") |>
     dplyr::mutate(id = media_id,
                   group = media_id,
-                  content = media_name,
+                  content = glue::glue("<b>{media_name}</b><br>
+                                       {media_start_date} to {media_end_date}<br>
+                                       £{media_spend}"),
                   start = media_start_date,
-                  end = media_end_date,
-                  editable = TRUE)
+                  end = media_end_date)
 
   # Create grouping metadata
   campaign_groups <- schedule |>
-    unnest_schedule() |>
     dplyr::group_by(campaign_id, campaign_name) |>
     dplyr::summarise(sort_order = sum(media_spend)) |>
     dplyr::ungroup() |>
@@ -26,7 +33,6 @@ schedule_timevis_prep <- function(schedule){
     dplyr::select(-sort_order)
 
   media_groups <- schedule |>
-    unnest_schedule() |>
     dplyr::group_by(campaign_id, media_id, media_type) |>
     dplyr::summarise() |>
     dplyr::ungroup()
@@ -67,15 +73,15 @@ schedule_timevis_read <- function(timevis_output){
 # ------------------------------------------------------------------------------
 # Schedule Editor
 # ------------------------------------------------------------------------------
-shiny_edit_components <- function(label, value, locked_cols = '_id'){
-  if(stringr::str_detect(label, locked_cols)){
+shiny_edit_components <- function(id, label, value, locked_cols = '_id'){
+  if(stringr::str_detect(id, locked_cols)){
     shiny::p(glue::glue("{stringr::str_to_title(stringr::str_replace_all(label, '_', ' '))}: {value}"))
   } else if(is.character(value)){
-    shiny::textInput(label, stringr::str_to_title(stringr::str_replace_all(label, "_", " ")), value)
+    shiny::textInput(id, stringr::str_to_title(stringr::str_replace_all(label, "_", " ")), value)
   } else if(is.numeric(value)){
-    shiny::numericInput(label, stringr::str_to_title(stringr::str_replace_all(label, "_", " ")), value)
+    shiny::numericInput(id, stringr::str_to_title(stringr::str_replace_all(label, "_", " ")), value)
   } else if(lubridate::is.Date(value)){
-    shiny::dateInput(label, stringr::str_to_title(stringr::str_replace_all(label, "_", " ")), value)
+    shiny::dateInput(id, stringr::str_to_title(stringr::str_replace_all(label, "_", " ")), value)
   }
 }
 
@@ -83,7 +89,7 @@ campaignEditUI <- function(id){
   ns <- shiny::NS(id)
   shiny::tagList(
     shiny::uiOutput(ns("ui_campaigns_select")),
-    shiny::uiOutput(ns("ui_media_select")),
+    shiny::uiOutput(ns("ui_media_type_select")),
     timevis::timevisOutput(ns("gantt"))
   )
 }
@@ -127,18 +133,20 @@ campaignEditServer <- function(id, schedule){
       shiny::selectInput(shiny::NS(id, "uiCampaignsSelect"), "Campaigns", dropdown_options, dropdown_options, multiple = TRUE)
     })
 
-    output$ui_media_select <- shiny::renderUI({
+    output$ui_media_type_select <- shiny::renderUI({
       dropdown_options <- schedule_unnested() |>
         dplyr::filter(campaign_id %in% input$uiCampaignsSelect) |>
-        dplyr::group_by(media_id, media_name) |>
+        dplyr::group_by(media_type_id, media_type) |>
         dplyr::summarise() |>
         to_named_vector()
 
-      shiny::selectInput(shiny::NS(id, "uiMediaSelect"), "Media", dropdown_options, dropdown_options, multiple = TRUE)
+      shiny::selectInput(shiny::NS(id, "uiMediaTypeSelect"), "Media Type", dropdown_options, dropdown_options, multiple = TRUE)
     })
 
-    filtered_schedule <- reactive({
-      schedule_unnested()
+    schedule_filtered <- reactive({
+      schedule_unnested() |>
+        dplyr::filter(campaign_id %in% input$uiCampaignsSelect) |>
+        dplyr::filter(media_type_id %in% input$uiMediaTypeSelect)
     })
 
     # --------------------------------------------------------------------------
@@ -146,13 +154,13 @@ campaignEditServer <- function(id, schedule){
     # --------------------------------------------------------------------------
     output$gantt <- timevis::renderTimevis({
 
-      timevis_data <- schedule_timevis_prep(schedule_reactive$schedule)
+      timevis_data <- schedule_timevis_prep(schedule_filtered())
 
       # Draw timevis
       timevis_data$items |>
         timevis::timevis() |>
         timevis::setGroups(timevis_data$groups) |>
-        timevis::setOptions(list(editable = TRUE))
+        timevis::setOptions(list(editable = FALSE))
     })
 
     current_media <- reactive({
@@ -180,7 +188,7 @@ campaignEditServer <- function(id, schedule){
             output_name <- glue::glue("{edit_prefix}{.}")
             output[[output_name]] <-
               shiny::renderUI({
-                shiny_edit_components(shiny::NS(id, input_name), current_media()[[input_name]])
+                shiny_edit_components(shiny::NS(id, input_name), input_name, current_media()[[input_name]])
               })
           }
         )
