@@ -65,21 +65,8 @@ schedule_timevis_read <- function(timevis_output){
 
 
 # ------------------------------------------------------------------------------
-# timevis
+# Schedule Editor
 # ------------------------------------------------------------------------------
-scheduleTimevisUI <- function(id){
-  shiny::tagList(
-    timevis::timevisOutput(shiny::NS(id, "gantt"))
-  )
-}
-
-scheduleTimevisServer <- function(id, schedule){
-
-  shiny::moduleServer(id, function(input, output, session) {
-
-  })
-}
-
 shiny_edit_components <- function(label, value, locked_cols = '_id'){
   if(stringr::str_detect(label, locked_cols)){
     shiny::p(glue::glue("{stringr::str_to_title(stringr::str_replace_all(label, '_', ' '))}: {value}"))
@@ -239,9 +226,10 @@ campaignEditServer <- function(id, schedule){
           }
         )
 
-    observeEvent(input$uiSaveMedia, {
-      browser()
-    })
+    # --------------------------------------------------------------------------
+    # Return the amended schedule
+    # --------------------------------------------------------------------------
+    return(shiny::reactive(schedule_reactive$schedule))
 
   })
 }

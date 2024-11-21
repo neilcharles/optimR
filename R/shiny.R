@@ -34,21 +34,11 @@ maintain_schedule_interactive <- function(schedule){
       glue::glue("Editing: {global_schedule_obj}")
     )
 
-    campaignEditServer("edit_campaign", schedule)
+    schedule_amended <- campaignEditServer("edit_campaign", schedule)
 
     shiny::observeEvent(input$uiCommit, {
-
-      amended_schedule <- input$gantt_data |>
-        dplyr::mutate(
-          media_name = content,
-          media_start_date = lubridate::as_date(start),
-          media_end_date = lubridate::as_date(end),
-        ) |>
-        dplyr::select(-id, -content, -start, -end, -editable) |>
-        schedule_nest()
-
       # https://stackoverflow.com/questions/32944961/modify-global-data-from-within-a-function-in-r
-      assign(global_schedule_obj, amended_schedule, envir =  globalenv())
+      assign(global_schedule_obj, schedule_amended(), envir =  globalenv())
     })
 
   }
