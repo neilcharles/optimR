@@ -7,6 +7,8 @@
 #' @examples
 schedule_timevis_prep <- function(schedule, unnested = TRUE){
 
+  granularity <- schedule$schedule_granularity[1]
+
   options(scipen = 999)
 
   if(!unnested){
@@ -16,40 +18,58 @@ schedule_timevis_prep <- function(schedule, unnested = TRUE){
 
   # Unnest to media level and add timevis variables
   timevis_items <- schedule |>
+    dplyr::mutate(media_end_date = media_end_date + lubridate::duration(1, granularity)) |>
     dplyr::mutate(id = media_id,
-                  group = media_id,
-                  content = glue::glue("<b>{media_name}</b><br>
-                                       {media_start_date} to {media_end_date}<br>
-                                       £{media_spend}"),
+                  group = media_type_id,
+                  content = glue::glue("<b>{media_name}</b>  £{media_spend} <br>
+                                       {media_start_date} - {media_end_date}"),
                   start = media_start_date,
                   end = media_end_date)
 
-  # Create grouping metadata
-  campaign_groups <- schedule |>
-    dplyr::group_by(campaign_id, campaign_name) |>
-    dplyr::summarise(sort_order = sum(media_spend)) |>
-    dplyr::ungroup() |>
-    dplyr::arrange(-sort_order) |>
-    dplyr::select(-sort_order)
-
-  media_groups <- schedule |>
-    dplyr::group_by(campaign_id, media_id, media_type) |>
-    dplyr::summarise() |>
-    dplyr::ungroup()
-
-  unified_groups <- tibble::tibble(id = c(campaign_groups$campaign_id, media_groups$media_id),
-                                   content = c(campaign_groups$campaign_name, media_groups$media_type))
-
-  subgroups <- media_groups |>
-    tidyr::nest(.by = campaign_id) |>
-    dplyr::mutate(nestedGroups = purrr::map(data, "media_id")) |>
-    dplyr::select(-data)
-
-  final_groups <- unified_groups |>
-    dplyr::left_join(subgroups, by = c("id"="campaign_id"))
+  final_groups <- create_timevis_groups(schedule)
 
   return(list(items = timevis_items, groups = final_groups))
 }
+
+create_timevis_groups <- function(schedule, levels = c("media_type", "media_group"), unnested = TRUE){
+
+  if(!unnested){
+    schedule <- schedule |>
+      unnest_schedule(level = "media")
+  }
+
+  final_groups <- tibble::tibble(id = character(), content = character(), nestedGroups = list())
+
+  for(level_cur in 1:(length(levels)-1)){
+
+    items <- schedule |>
+      dplyr::group_by(dplyr::across(c(glue::glue("{levels[level_cur]}_id"), glue::glue("{levels[level_cur]}_name"), glue::glue("{levels[level_cur+1]}_id")))) |>
+      dplyr::summarise(.groups = "drop")
+
+    groups <- schedule |>
+      dplyr::group_by(dplyr::across(c(glue::glue("{levels[level_cur+1]}_id"), glue::glue("{levels[level_cur+1]}_name")))) |>
+      dplyr::summarise(.groups = "drop")
+
+    unified_groups <- tibble::tibble(id = c(items[[glue::glue("{levels[level_cur]}_id")]], groups[[glue::glue("{levels[level_cur+1]}_id")]]),
+                                     content = c(items[[glue::glue("{levels[level_cur]}_name")]], groups[[glue::glue("{levels[level_cur+1]}_name")]]))
+
+    subgroups <- items |>
+      tidyr::nest(.by = glue::glue("{levels[level_cur+1]}_id")) |>
+      dplyr::mutate(nestedGroups = purrr::map(data, glue::glue("{levels[level_cur]}_id"))) |>
+      dplyr::select(-data)
+
+    timevis_groups <- unified_groups |>
+      dplyr::left_join(subgroups, by = c("id"=glue::glue("{levels[level_cur+1]}_id")))
+
+    final_groups <- final_groups |>
+      dplyr::union_all(timevis_groups) |>
+      dplyr::filter(length(nestedGroups)>0)
+  }
+
+  final_groups
+
+}
+
 
 #' Takes input from scheduleTimevisUI and converts it back into a regular schedule object for storage and optimisation etc.
 #'
@@ -89,7 +109,7 @@ campaignEditUI <- function(id){
   ns <- shiny::NS(id)
   shiny::tagList(
     shiny::uiOutput(ns("ui_campaigns_select")),
-    shiny::uiOutput(ns("ui_media_type_select")),
+    shiny::uiOutput(ns("ui_media_category_select")),
     timevis::timevisOutput(ns("gantt"))
   )
 }
@@ -133,26 +153,30 @@ campaignEditServer <- function(id, schedule){
       shiny::selectInput(shiny::NS(id, "uiCampaignsSelect"), "Campaigns", dropdown_options, dropdown_options, multiple = TRUE)
     })
 
-    output$ui_media_type_select <- shiny::renderUI({
+    output$ui_media_category_select <- shiny::renderUI({
       dropdown_options <- schedule_unnested() |>
         dplyr::filter(campaign_id %in% input$uiCampaignsSelect) |>
-        dplyr::group_by(media_type_id, media_type) |>
+        dplyr::group_by(media_category_id, media_category_name) |>
         dplyr::summarise() |>
         to_named_vector()
 
-      shiny::selectInput(shiny::NS(id, "uiMediaTypeSelect"), "Media Type", dropdown_options, dropdown_options, multiple = TRUE)
+      shiny::selectInput(shiny::NS(id, "uiMediaCategorySelect"), "Media Category", dropdown_options, dropdown_options, multiple = TRUE)
     })
 
     schedule_filtered <- reactive({
+      req(input$uiCampaignsSelect, input$uiMediaCategorySelect)
+
       schedule_unnested() |>
         dplyr::filter(campaign_id %in% input$uiCampaignsSelect) |>
-        dplyr::filter(media_type_id %in% input$uiMediaTypeSelect)
+        dplyr::filter(media_category_id %in% input$uiMediaCategorySelect)
     })
 
     # --------------------------------------------------------------------------
     # Gantt vis
     # --------------------------------------------------------------------------
     output$gantt <- timevis::renderTimevis({
+
+      req(schedule_filtered())
 
       timevis_data <- schedule_timevis_prep(schedule_filtered())
 
